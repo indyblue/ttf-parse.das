@@ -4,7 +4,7 @@ var b85 = require('base85');
 //var lzw = require("node-lzw");
 var zlib = require('zlib');
 
-var debug = true;
+var debug = false;
 
 var ro = {
 	ulong: function(fd, offset, cb){
@@ -126,7 +126,6 @@ var clttf = function() {
 			this.getSize();
 
 			this.getGPOS();
-
 		},
 		getTables: function() {
 			var fb = this.fb;
@@ -174,7 +173,6 @@ var clttf = function() {
 				o+=8;
 			}
 			this.d.glyphs.encTables = encTbl;
-
 		},
 		getFontName: function() {
 			var fb = this.fb;
@@ -488,7 +486,7 @@ var x = module.exports = {
 			if(debug) log('opening '+ttfile, size);
 			if(err) log(JSON.stringify(err));
 			ro.getBuff(fd, 0, size, (fb)=>{
-				console.log(ttfile, size);
+				//console.log(ttfile, size);
 				var ttf = new clttf();
 				ttf.fb = fb;
 				if(ro.ulong(fb, 0) == 0x00010000) {
