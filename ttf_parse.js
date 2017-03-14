@@ -552,6 +552,14 @@ var x = module.exports = {
 		if(typeof data === 'object') 
 			contents = this.stringify(data, null, 2);
 		fs.writeFile(fname, contents, cb);
+	},
+	cidinit: function(cb) {
+		var fn = path.join(__dirname, 'ttf_cidinit.txt');
+		fs.readFile(fn, (err, data)=> {
+			if(err) throw err;
+			//console.log(data);
+			if(typeof cb=='function') cb(data);
+		});
 	}
 };
 
