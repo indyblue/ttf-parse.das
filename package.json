@@ -1,5 +1,5 @@
 {
-  "name": "das-ttf-parse",
+  "name": "ttf-parse.das",
   "version": "1.0.0",
   "description": "",
   "main": "ttf_parse.js",
