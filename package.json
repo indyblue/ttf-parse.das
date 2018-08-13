@@ -4,7 +4,7 @@
   "description": "",
   "main": "ttf_parse.js",
   "dependencies": {
-	"base85": "latest"
+    "base85": "latest"
   },
   "devDependencies": {},
   "scripts": {
