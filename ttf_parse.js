@@ -13,9 +13,9 @@ var debug = false;
 
 const getBuff = async (fd, offset, length, cb) => {
 	let buff = new Buffer(length);
-	const { bytesRead, buffer } = await fs.read(fd, buff, 0, length, offset);
+	const { bytesRead, buffer } = await fread(fd, buff, 0, length, offset);
 	buffer.bytesRead = bytesRead;
-	return bytesRead;
+	return buffer;
 };
 var ro = {
 	ulong: async (fd, offset) => {
@@ -42,9 +42,9 @@ var ro = {
 		if (Buffer.isBuffer(fd))
 			return parseFloat('' + fd.readInt16BE(offset) + '.' + fd.readUInt16BE(offset + 2));
 		let buff = await getBuff(fd, offset, 4);
-		return parseFloat('' + b.readInt16BE(0) + '.' + b.readUInt16BE(2));
+		return parseFloat('' + buff.readInt16BE(0) + '.' + buff.readUInt16BE(2));
 	},
-	substr: function (fd, offset, length, cb) {
+	substr: async (fd, offset, length, cb) => {
 		if (Buffer.isBuffer(fd)) return fd.toString('utf8', offset, offset + length);
 		let buff = await getBuff(fd, offset, length);
 		return buff.toString();
@@ -382,7 +382,7 @@ var clttf = () => ({
 					var oClDef1 = await uint(fb, o3); o3 += offSize;
 					var oClDef2 = await uint(fb, o3); o3 += offSize;
 					var cl1cnt = await ro.ushort(fb, o3); o3 += 2;
-					var cl2cnt = ro.ushort(fb, o3); o3 += 2;
+					var cl2cnt = await ro.ushort(fb, o3); o3 += 2;
 					var o4 = gpos.offset + gp.llo + lo + subo + oClDef1;
 					var cl1 = await this.classPairTable(fb, o4);
 					var o4 = gpos.offset + gp.llo + lo + subo + oClDef2;
@@ -459,7 +459,7 @@ var clttf = () => ({
 		}
 		nobj[key] = arguments[x];
 	},
-	flip: async function (o) {
+	flip: function (o) {
 		if (typeof o !== 'object') return o;
 		var retval = {};
 		for (var k in o) {
@@ -472,7 +472,7 @@ var clttf = () => ({
 });
 
 var x = module.exports = {
-	parse: async (ttfile, cb) => {
+	parse: async (ttfile, incRaw) => {
 		var data = {
 			fname: ptool.parse(ptool.resolve(ttfile))
 		};
@@ -481,43 +481,51 @@ var x = module.exports = {
 			var a = [].slice.call(arguments);
 			data.log.push(a.join(' '));
 		}
-		const fd = await fs.open(ttfile, 'r');
+		const fd = await fopen(ttfile, 'r');
 		var lstat = fs.lstatSync(ttfile);
 		var size = lstat.size;
 		if (debug) log('opening ' + ttfile, size);
-		if (err) log(JSON.stringify(err));
-		const buff = await ro.getBuff(fd, 0, size);
 		//console.log(ttfile, size);
-		var ttf = new clttf();
-		ttf.fb = buff;
-		if (ro.ulong(buff, 0) == 0x00010000) {
+		var ttf = clttf();
+		if (await ro.ulong(fd, 0) == 0x00010000) {
 
+			ttf.fb = fd;
 			ttf.log = log;
-			await ttf.parseTTF(buff);
+			await ttf.parseTTF(fd);
 			data.metric = ttf.d.metric;
 			data.fdesc = ttf.d.fdesc;
 			data.cw = ttf.d.glyphs.cw;
 			data.kern = ttf.d.kern;
 			data.ctg = ttf.d.glyphs.ctg;
-			data.fname.blength = buff.length;
+			data.fname.blength = size;
 
-			data.raw = buff.toString('binary');
-			//.replace(/(.{80})/g, '$1\n');;
+			if (incRaw !== undefined) {
+				const buff = await ro.getBuff(fd, 0, size);
+				let raw = '';
+				if (incRaw & x.ZLIB) {
+					raw = zlib.deflateRawSync(buff);
+					data.fname.zlength = raw.length;
+				}
+				else raw = buff;
 
-			//var fb_zip = zlib.deflateRawSync(fb);
-			//data.fname.zlength = fb_zip.length;
-
-			//var fb85 = b85.encode(fb_zip, 'ascii85');
-			//.replace(/(.{80})/g, '$1\n');
-			//data.fname.a85length = fb85.length;
-
-			//data.ttf85 = fb85
-
-			cb(data);
+				if (incRaw & x.B85) {
+					raw =  b85.encode(raw, 'ascii85');
+					data.fname.b85length = raw.length;
+				} else if (incRaw & x.B64) {
+					raw = raw.toString('base64');
+					data.fname.b64length = raw.length;
+				} else {
+					raw = raw.toString('binary');
+				}
+				data.raw = raw;
+			}
+			return data;
 		}
 		else log('not a ttf file');
+		return null;
 	},
-	stringify: function (obj, replacer, i) {
+	ZLIB: 1, B85: 2, B64: 4,
+	stringify: (obj, replacer, i) => {
 		var json = JSON.stringify(obj, replacer, i);
 		var w = process.stdout.columns;
 		w = 80;
@@ -539,11 +547,12 @@ var x = module.exports = {
 				strtmp += ws + rxl[2];
 				lstind = ind;
 			}
+			strout += strtmp;
 			json = strout;
 		}
 		return json;
 	},
-	save: async (fname, data) => {
+	save: async function (fname, data) {
 		if (!fname) fname = ptool.join(data.fname.dir, data.fname.name + '.json');
 		if (!ptool.isAbsolute(fname))
 			fname = ptool.join(__dirname, fname);
