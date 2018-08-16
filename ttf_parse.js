@@ -472,7 +472,7 @@ var clttf = () => ({
 });
 
 var x = module.exports = {
-	parse: async (ttfile, incRaw) => {
+	parse: async (ttfile) => {
 		var data = {
 			fname: ptool.parse(ptool.resolve(ttfile))
 		};
@@ -499,25 +499,26 @@ var x = module.exports = {
 			data.ctg = ttf.d.glyphs.ctg;
 			data.fname.blength = size;
 
-			if (incRaw !== undefined) {
+			data.raw = async (rawType) => {
+				const fd = await fopen(ttfile, 'r');
 				const buff = await ro.getBuff(fd, 0, size);
 				let raw = '';
-				if (incRaw & x.ZLIB) {
+				if (rawType & x.ZLIB) {
 					raw = zlib.deflateRawSync(buff);
 					data.fname.zlength = raw.length;
 				}
 				else raw = buff;
 
-				if (incRaw & x.B85) {
-					raw =  b85.encode(raw, 'ascii85');
+				if (rawType & x.B85) {
+					raw = b85.encode(raw, 'ascii85');
 					data.fname.b85length = raw.length;
-				} else if (incRaw & x.B64) {
+				} else if (rawType & x.B64) {
 					raw = raw.toString('base64');
 					data.fname.b64length = raw.length;
 				} else {
 					raw = raw.toString('binary');
 				}
-				data.raw = raw;
+				return raw;
 			}
 			return data;
 		}
